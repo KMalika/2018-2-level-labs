@@ -8,165 +8,187 @@ import math
 REFERENCE_TEXT = ''
 if __name__ == '__main__':
     with open('not_so_big_reference_text.txt', 'r') as f:
-        REFERENCE_TEXT = f.read()
+        REFERENCE_TEXT = f.readlines()
+        TEXT = " ".join(REFERENCE_TEXT)
 
-punc_marks = ['.', '!', '?']
-unexp_symbols = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "'", '"', "@", "#", "$", "%", "^", "&", "(", ")", "<", ">", "+", "-", "=", "_", "*", ","]
 
 class WordStorage:
-
     def __init__(self):
-       self.storage = {}
+        self.storage = {}
 
     def put(self, word: str) -> int:
-        if word == None or type(word) != str:
-           return {}
-        else:
-           swords = []
-           for k in self.storage.swords():
-               swords.append(k)
-           if word in swords:
-              return swords.index(word)
-           else:
-              swords.append(word)
-              numbers = swords.index(word)
-              self.storage[word] = numbers
-              return numbers
+
+        if word not in self.storage and isinstance(word, str):
+            code_word = hash(word)
+            self.storage[word] = code_word
+            return code_word
 
     def get_id_of(self, word: str) -> int:
-        if word == None or type(word) != str or word not in self.storage.swords():
-           return -1
-        else:
-           return self.storage[word]
 
-    def get_original_by(self, numbers: int) -> str:
-        if numbers == None or type(numbers) != int or numbers not in self.storage.values():
-           return 'UNK'
-        else:
-           for k in self.storage.swords():
-               if self.storage[k] == numbers:
-                  return k
+        if word in self.storage:
+            return self.storage.get(word)
 
+        return -1
+
+    def get_original_by(self, id_word: int) -> str:
+
+        id_index = -1
+        if id_word in self.storage.values():
+            id_index = list(self.storage.values()).index(id_word)
+        if id_index != -1:
+            return list(self.storage.keys())[id_index]
+        return "UNK"
 
     def from_corpus(self, corpus: tuple):
-        if corpus == None or type(corpus) != tuple or corpus == ():
-                return {}
-        else:
-           corpus1 = []
-           for i in range(0, len(corpus)):
-               if corpus[i] not in self.storage.swords():
-                  corpus1.append(corpus[i])
-           for c in corpus1:
-               self.storage[c] = corpus1.index(c)
-           return self.storage
+
+        if corpus and isinstance(corpus, tuple):
+            for word in corpus:
+                code_word = hash(word)
+                self.storage[word] = code_word
+
+        return self.storage
 
 
-class NGramTrie:
-
-    def __init__(self, size):
-       self.gram_frequencies = {}
-       self.gram_log_probabilities = {}
-       self.size = size
+class NGramTrie():
+    def __init__(self, n):
+        self.size = n
+        self.gram_frequencies = {}
+        self.gram_log_probabilities = {}
+        self.gram_frequencies_all = {}
+        self.sentence_code_list = []
 
     def fill_from_sentence(self, sentence: tuple) -> str:
-        swords = []
-        if sentence == () or type(sentence) != tuple or sentence == None:
-           self.gram_frequencies = {}
-        else:
-           for i in range(0, len(sentence)-(self.size-1)):
-               k = tuple(sentence[i: i + self.size])
-               swords.append(k)
-               if k[-1] == '</s>':
-                  swords.append(k)
-                  break
-           for i in range(len(swords)):
-               self.gram_frequencies[swords[i]] = swords.count(swords[i])
-           return'OK'
+
+        if sentence and isinstance(sentence, tuple):
+            self.sentence_code_list += list(sentence)
+
+            try:
+                sentence_list = list(sentence)
+                for i in range(len(sentence_list) - self.size + 1):
+                    count_n_gram = 0
+                    n_gram = tuple(sentence_list[i:i + self.size])
+                    if n_gram not in self.gram_frequencies.keys():
+                        for k in range(len(self.sentence_code_list) - self.size + 1):
+                            if self.sentence_code_list[k:k + self.size] == list(n_gram):
+                                count_n_gram += 1
+                        self.gram_frequencies[n_gram] = count_n_gram
+                answer = "OK"
+            except AssertionError:
+                answer = "ERROR"
+
+            return answer
 
     def calculate_log_probabilities(self):
-        zn = 0
-        for k in self.gram_frequencies.swords():
-            zn = self.gram_frequencies[k]
-            ch = self.gram_frequencies[k]
-            for key in self.gram_frequencies.swords():
-                if key != k and key[0:self.size-1] == k[0:self.size-1]:
-                   zn += self.gram_frequencies[key]
-            self.gram_log_probabilities[k] = math.log(ch/zn)
+
+        for n_gram in self.gram_frequencies:
+            n_gram_part_count = 0
+            n_gram_part = n_gram[:-1]
+            for index, key in enumerate(list(self.gram_frequencies.keys())):
+                if n_gram_part == key[:-1]:
+                    n_gram_part_count += list(self.gram_frequencies.values())[index]
+            probability = self.gram_frequencies[n_gram] / n_gram_part_count
+            self.gram_log_probabilities[n_gram] = math.log(probability)
+
         return self.gram_log_probabilities
 
     def predict_next_sentence(self, prefix: tuple) -> list:
-        if prefix == None or type(prefix) != tuple:
-           return []
-        elif len(prefix) != self.size-1:
-           return []
-        else:
-           lst = []
-           for k in self.gram_log_probabilities.swords():
-               if k[0:self.size-1] == prefix:
-                  lst.append(self.gram_log_probabilities[k])
-           if lst == []:
-              return list(prefix)
-           else:
-               result = []
-               val = []
-               while True:
-                   for k in self.gram_log_probabilities.swords():
-                       if k[0:self.size-1] == prefix:
-                           val.append(self.gram_log_probabilities[k])
-                   if len(val) == 0:
-                       break
-                   else:
-                       maximum = max(val)
-                       for k in self.gram_log_probabilities.swords():
-                           if self.gram_log_probabilities[k] == maximum and result == []:
-                               for c in k:
-                                   result.append(c)
-                           elif self.gram_log_probabilities[k] == maximum and len(result) != 0:
-                               result.append(k[-1])
-                       val = []
-                       maximum = 0
-                       prefix = tuple(result[-(self.size-1):])
-               return result
+
+        if not prefix or not isinstance(prefix, tuple):
+            return []
+        if len(prefix) != self.size - 1:
+            return []
+
+        n_gram_part = []
+        n_gram_answer = []
+        log_prob_list_number = []
+        log_prob_l = sorted(self.gram_log_probabilities, key=self.gram_log_probabilities.__getitem__, reverse=True)
+        for i in log_prob_l:
+            log_prob_list_number += [self.gram_log_probabilities.get(i)]
+        for n_gram_one in log_prob_l:
+            if not n_gram_one[:-1] in n_gram_part:
+                n_gram_part += [n_gram_one[:-1]]
+                n_gram_answer += [n_gram_one[-1]]
+
+        prefix_list = list(prefix)
+        prefix_word = tuple(prefix)
+        while True:
+            if tuple(prefix_list[-self.size + 1:]) in n_gram_part:
+                prefix_index = n_gram_part.index(prefix_word)
+                n_gram_whole = tuple(list(prefix_word) + [n_gram_answer[prefix_index]])
+                for key in log_prob_l:
+                    if key == n_gram_whole:
+                        prefix_list += [n_gram_answer[prefix_index]]
+                        prefix_word = prefix_list[-self.size + 1:]
+                        prefix_word = tuple(prefix_word)
+                        break
+            else:
+                break
+
+        return prefix_list
 
 
 def encode(storage_instance, corpus) -> list:
-    storage_instance = WordStorage.from_corpus(corpus)
-    corpus = list(corpus)
-    for i in range(0, len(corpus)):
-        for k in range(0, len(corpus[i])):
-            corpus[i][k] = storage_instance[corpus[i][k]]
-    return corpus
+    code_sentences = []
 
-def split_by_sentence(REFERENCE_TEXT: str) -> list:
-    if REFERENCE_TEXT == '' or REFERENCE_TEXT == None:
+    for sentence in corpus:
+        code_sentence = []
+        for word in sentence:
+            code_word = storage_instance.get_id_of(word)
+            code_sentence += [code_word]
+        code_sentences += [code_sentence]
+
+    return code_sentences
+
+
+def split_by_sentence(text: str) -> list:
+    if not text:
         return []
-    else:
-        if "\n" in REFERENCE_TEXT:
-            REFERENCE_TEXT = REFERENCE_TEXT.replace("\n", " ")
-        while "  " in REFERENCE_TEXT:
-            REFERENCE_TEXT = REFERENCE_TEXT.replace("  ", " ")
-        REFERENCE_TEXT = list(REFERENCE_TEXT)
-        for c in REFERENCE_TEXT:
-                    if c in undesired: REFERENCE_TEXT.remove(c)
-        REFERENCE_TEXT.remove(REFERENCE_TEXT[-1])
-        for i in range(len(REFERENCE_TEXT)):
-            if REFERENCE_TEXT[i] in uc_marks:
-                REFERENCE_TEXT[i] = '.'
-        REFERENCE_TEXT  = ''.join(REFERENCE_TEXT)
-        REFERENCE_TEXT = REFERENCE_TEXT.split(".")
-        for i in range(0, len(REFERENCE_TEXT)):
-            if REFERENCE_TEXT[i].isalpha:
-               REFERENCE_TEXT[i] = REFERENCE_TEXT[i].lower()
-        if len(REFERENCE_TEXT) == 1:
-            return []
-        for i in range(0, len(REFERENCE_TEXT)):
-            REFERENCE_TEXT[i] = REFERENCE_TEXT[i].split(" ")
-            for k in range(0, len(REFERENCE_TEXT[i]) - 1):
-                if REFERENCE_TEXT[i][k] == '':
-                   REFERENCE_TEXT[i].remove(REFERENCE_TEXT[i][k])
-                REFERENCE_TEXT[i][k].lower()
-            REFERENCE_TEXT[i].insert(0, "<s>")
-            REFERENCE_TEXT[i].insert(len(REFERENCE_TEXT[i]), "</s>")
-        return REFERENCE_TEXT
+    ord_list = (33, 63, 46)
+    if ord(text[-1]) not in ord_list:
+        return []
 
+    text = text.replace('\n', " ")
+    while "  " in text:
+        text = text.replace("  ", " ")
+    words = text.split(" ")
+    while "" in words:
+        words.remove("")
 
+    sentences = []
+    symbol_count = 0
+    ord_list = (33, 63, 46)
+
+    for index, word in enumerate(words):
+        if symbol_count == len(sentences):
+            sentences += [['<s>']]
+        if not word[-1].isalpha() and index == (len(words) - 1):
+            sentences[symbol_count].append(word[:-1])
+            sentences[symbol_count].append("</s>")
+            symbol_count += 1
+        elif ord(word[-1]) in ord_list and words[index + 1][0].isupper():
+            sentences[symbol_count].append(word[:-1])
+            sentences[symbol_count].append("</s>")
+            symbol_count += 1
+        else:
+            sentences[symbol_count].append(word)
+
+    new_sentences = []
+
+    for sentence in sentences:
+        new_words = []
+        for index, word in enumerate(sentence):
+            new_word = ""
+            if not word.isalpha() and (not word == '<s>' and not word == "</s>"):
+                for i in word:
+                    if i.isalpha():
+                        new_word += i
+                if new_word:
+                    new_words.append(new_word.lower())
+            else:
+                new_words.append(word.lower())
+        new_sentences += [new_words]
+
+    if new_sentences[0] == ["<s>", "</s>"]:
+        return []
+
+    return new_sentences

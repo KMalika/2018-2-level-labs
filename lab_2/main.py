@@ -14,7 +14,6 @@ if __name__ == '__main__':
     with open('very_big_reference_text.txt', 'r') as f:
         REFERENCE_TEXT = f.read()
 
-
 def propose_candidates(word: str, max_depths_permutations: int = 1) -> list:
     # Step 0. Test processing.
     if word is None or word == '' or max_depths_permutations == str(max_depths_permutations) \
